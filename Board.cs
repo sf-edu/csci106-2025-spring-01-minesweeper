@@ -6,28 +6,36 @@ public class Board
     public int PlayerCursorX = 0;
     public int PlayerCursorY = 0;
 
+    public bool IsFirstClick = true;
+
+    public int BombCount;
+    public int FlagCount;
+
     public bool[,] BombLocations;
     public bool[,] RevealedLocations;
     public bool[,] FlagLocations;
 
-    public Board(int width, int height)
+    public Board(int width, int height, int bombCount)
     {
         Width = width;
         Height = height;
+        BombCount = bombCount;
 
-        BombLocations = new bool[width, height];
-        FlagLocations = new bool[width, height];
-        RevealedLocations = new bool[width, height];
+        GenerateBoard();
     }
 
-    public void PlaceBombs(int bombsRequested)
+    private void GenerateBoard()
     {
+        BombLocations = new bool[Width, Height];
+        FlagLocations = new bool[Width, Height];
+        RevealedLocations = new bool[Width, Height];
+
         var rand = new Random();
         var bombsPlaced = 0;
 
         // Ensure that we keep placing bombs until we've reached the number
         // requested
-        while (bombsPlaced < bombsRequested)
+        while (bombsPlaced < BombCount)
         {
             var x = rand.Next(Width);
             var y = rand.Next(Height);
@@ -40,13 +48,13 @@ public class Board
         }
     }
 
-    public void RevealEverything()
+    public void RevealBombs()
     {
         for (var y = 0; y < Height; y++)
         {
             for (var x = 0; x < Width; x++)
             {
-                RevealedLocations[x, y] = true;
+                RevealedLocations[x, y] = RevealedLocations[x, y] || BombLocations[x, y];
             }
         }
     }
@@ -99,6 +107,19 @@ public class Board
 
     public void RevealAtCursor()
     {
+        if (IsFirstClick)
+        {
+            IsFirstClick = false;
+
+            while (
+                BombLocations[PlayerCursorX, PlayerCursorY]
+                || 0 < GetNeighboringBombCount(PlayerCursorX, PlayerCursorY)
+            )
+            {
+                GenerateBoard();
+            }
+        }
+
         if (!FlagLocations[PlayerCursorX, PlayerCursorY])
         {
             RevealAt(PlayerCursorX, PlayerCursorY);
@@ -107,8 +128,9 @@ public class Board
 
     public void ToggleFlagAtCursor()
     {
-        if (!RevealedLocations[PlayerCursorX, PlayerCursorY])
+        if (!IsFirstClick && !RevealedLocations[PlayerCursorX, PlayerCursorY])
         {
+            FlagCount += FlagLocations[PlayerCursorX, PlayerCursorY] ? -1 : 1;
             FlagLocations[PlayerCursorX, PlayerCursorY] = !FlagLocations[
                 PlayerCursorX,
                 PlayerCursorY
@@ -143,6 +165,28 @@ public class Board
         }
     }
 
+    public GameResult GetResult()
+    {
+        var isWin = true;
+        for (var y = 0; y < Height; y++)
+        {
+            for (var x = 0; x < Width; x++)
+            {
+                if (BombLocations[x, y] && RevealedLocations[x, y])
+                {
+                    return GameResult.Loss;
+                }
+
+                if (BombLocations[x, y] != FlagLocations[x, y])
+                {
+                    isWin = false;
+                }
+            }
+        }
+
+        return isWin ? GameResult.Win : GameResult.None;
+    }
+
     private string GetGridChar(int x, int y)
     {
         var isRevealed = RevealedLocations[x, y];
@@ -156,7 +200,7 @@ public class Board
 
         if (!isRevealed)
         {
-            return ".";
+            return "\u001b[90m.\u001b[0m";
         }
 
         if (isBomb)
@@ -198,4 +242,11 @@ public class Board
 
         return bombCount;
     }
+}
+
+public enum GameResult
+{
+    Win,
+    Loss,
+    None,
 }
